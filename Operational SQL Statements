@@ -1,0 +1,132 @@
+-- This document will hold the list of sql statements used for accessing and updating data in our data base. for those unfamiliar with sql (-- ) causes a comment for the rest of that line, so any section after those until the end of that line is for comments.
+
+-- Now Adding transactions, This will ensure that our data stays consistent even if multiple clients attempt to interact with critical sections.
+-- note to self Use "set transaction isolation level serializable;" before starting the transaction in order to make it so statements lock after select satements
+
+USERS SECTION
+-- component statements (users)
+	-- Finds the user id given an email
+		   select users_id from users 
+		   where users_email = "steve.com";   --Steve.com example email, any email can be used as long as it exists
+	-- Finds the current cart for a user using users_id
+		   select max(cart_id) from cart
+		   where users_id = "1"; -- 1 is example users_id
+	-- Finds the current cart for a specific user using email,
+		   select max(cart_id) from cart
+		   join users on cart.users_id = users.users_id
+		   where users_email = "steve.com";
+  -- Create a new cart for an existing user (refer to step 2 AND 3 of How to create a new user!)
+  -- Set the users current cart to the most recent created cart (reffer to step 3 of How to create a new user!)
+  -- Password Verification, Check User Log in step 2.
+
+
+
+-- User Registration.
+-- email is unique!
+-- step 1 creates the user
+	   insert into users (users_name,users_email,users_password) -- (location and card information comes later on (or we can make it be done on account creation for simplicity sake)) 
+	   values ("steve","steve.com","steveword");  -- example data. ordering of data matches the order in the above statement
+
+-- step 2 creates a new cart for an existing user
+	   insert into cart (users_id) -- insert a cart for the new user
+	   select users_id from users where users_email = "steve.com"; -- find the new users user id, using the users email (which should be a unique entry that is indexd taking only 1 step.) 
+ 
+-- step 3 sets the users current cart to the most recently created cart. (try to only create new carts after the previous cart is used for a purchase or has been deleted for some reason.)
+	   update users
+	   set current_cart_id = (select max(cart_id) from cart where cart.users_id = users.users_id) -- sets the cart id to be equivalent to the max cart id associated with that user (the newest created cart for that user)
+	   where users_email = "steve.com"; -- the where clause can be replaced by any unique index (email or id of the user).
+
+-- User Log in.
+
+-- step 1. find the user by looking up email (the user will be required to log in using the email associated with the account, and an inputed password)
+	-- Finds the user id given an email, (if it exists)
+		    select users_id from users 
+		    where users_email = "steve.com"; -- example email. (make sure to store the users_id as a session variable ONLY AFTER LOG IN IS COMPLETE)
+           
+--  step 2. Compare the password to the password in the data base. (note that the user inputed password must first be ran through the hash and salt before being compared to password in DB!!) 
+	-- this select statement returns the password of the user.
+			select users_password from users
+			where users_id = 1; -- example users id. (u can exchange this where statement with the where statement above if you don't have users_id.) looking up by any other parameter will be very slow as they are not indexed.
+
+-- step 3. Store the users_id as a session variable once log in is complete, and make sure to destroy the session when they log out.
+
+
+PRODUCT SECTION.(wip)
+
+
+
+
+
+CART AND PRODUCT_PAIR SECTION
+-- component statements (product_pair)
+	-- checks if a product of (product_id) exists within cart of (cart_id)
+		 select product_id from product_pair 
+		 where cart_id = 3 and product_id = 2;
+
+	-- checks the quantity of a product within a cart
+		 select product_amount from product_pair
+		 where cart_id = 3 and product_id = 1;
+	-- creation of a new cart for a user is under the users section.
+
+-- cart operations
+
+-- insert into cart (create product pair)
+	-- Step 1. (no longer needed due to change in database, (refer to changes made 10/30/2024) Use to be that we had to check if the product already existed in the cart
+    	-- Step 2. create the product pair.    
+		  insert into product_pair (cart_id,product_id,product_amount) -- the cart the item belongs to, the item that is being put into that cart, the amount of that item being added
+		  values (3,1,5); -- if the product already exists in the cart, the statement will error out
+         
+-- modify the quantity of an item in the cart
+	-- Step 1. check if the product exists in the cart (refer to step 1 of inserting into cart)
+    	-- Step 2. Increase the quantity in the database by the requested amount
+		 update product_pair
+        	 set product_amount = 7 -- 7 is an example, set the product amount to whatever the user requests, If its an increasement or decreasement relative to the current amount look in component statements for how to check current quantity of a product and add what you want to increase or decrease by.
+         	 where cart_id = 3 and product_id = 1; -- we select the product who's quantity we are increasing, and the cart which that product exists in (as checked in step 1)
+    
+-- view all product pairs in a cart (returns the product ids, and corisponding amount)
+	select product_id,product_amount from product_pair
+	where cart_id = 3; -- example cart id
+
+-- view all product pairs in the users current cart.
+	select product_id,product_amount from users -- return all product id and amount pairs associated with users
+	join Product_pair on users.current_cart_id = Product_pair.cart_id -- this join statement lets us find all product pairs associated with a users current cart id.
+	where users_id = 1; -- User id picks which user it is.
+
+-- clear cart
+	delete from Product_pair -- This deletes all product pairs associated with the cart.
+	where cart_id = 1 -- 1 is cart id example
+
+-- remove a product_pair from a cart.
+	delete from Product_pair -- deletes the product pairs from cart id of product id
+	where cart_id = 1 and product_id = 1;-- example cart id and product id
+
+
+SALE SECTION.
+
+-- Finalize a sale
+	-- step 1 (before purchasing). STORE THE CURRENT CARTS CONTENTS, CART ID, AND PAYMENT METHOD USED IN SESSION VARIABLE AND RE CONFIRM IF THEY WANT TO PURCHASE.(the first thing we must do is ensure that the no other user accessing the same account can change the contents of what is being purchased! store the items currently in the cart, and then display those contents in a confirmation page.)
+		-- Check view all product pairs in users current cart
+	-- step 2 (after confirming purchase and finalizing sale). We must create and set a new cart so that any new updates or changes to the users current cart occur there rather than in our purchase.
+		-- Refer to users section to see how to create a new cart, and set that cart as the new current cart.
+
+	-- step 3 (update the (now no longer current cart, but cart id saved in step 1) with the data stored in the session so it accuratley reflects what the user agreed to purchase)
+		delete from Product_pair -- This logic occurs in 2 steps. Step 1 is to remove all of the previous data within the cart....
+		where cart_id = 1 -- set this cart id to the session stored cart id! This will remove all products from cart
+	-- step 3.5
+    	-- follow step 2 of insert into cart from cart operations (there shouldn't be any duplicate sets so we shouldn't have to check
+
+	-- step 4 Calculate the total cost of the cart. (will update asap)
+		-- first use the (not yet created in product) to find the price of an item using its id, for all id's found in the cart, and add up the price total(make sure to multiply by quantity purchased before adding it to total). (you can find the product id's and quantities directly in you session variables from earlier).
+
+	-- step 5 Now that our cart is prepared, we can now transfer that data into sales history
+		insert into sale (cart_id,payment_method,total_amount) -- the cart id that is stored in variable, (make the user select a payment method before paying and store it in session, and the total_amount that was calculated in step 4.) The current date and time is automatically put in upon creation. Payment completion is automatically set to false.
+		values(1,"payment",12.45); -- example data.
+	
+	-- step 6. Once payment is recieved we update the payment recieved to true.
+		update sale
+        	set payment_complete = true -- set payment recieved to true
+		where cart_id = 1; -- for carts with the corosponding cart id, 1 is example (grab from session)
+
+	-- step 7. Clean up session variables.
+
+
