@@ -1,12 +1,12 @@
-This is the current MySql script for our data base construction, Any updates to it will be added to the changelog / potential future updates section at the bottom.
-
-
 create table product
   (
   product_id int primary key auto_increment not null,
   product_name varchar(100) not null,
   price double not null,
   stock int not null
+  rating double ,
+  num_rating int ,
+  category varchar(100) 
   );
 create table users
   (
@@ -52,11 +52,3 @@ create table sale
 
 alter table product_pair
 add constraint no_dupe unique (cart_id , product_id);
-
-Change Log:
-Current_Cart_id in Users originaly was (int not null) causing an issue when trying to create the first cart or users, both requiring eachother to have already been created(Now just int(line 19)) 10/29/2024
-Making users_email in users to be a unique index (this is added at the step before the alter table for adding the foreign key constraint.(Line 28)) 10/29/2024
-added a table constraint so we don't have duplicate product entries inside of a cart. 10/30/2024
-
-Potential Future Changes:
-adding indexing to all fields (besides stock) in product to increase query speed

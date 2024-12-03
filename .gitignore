@@ -8,11 +8,15 @@
 # testing
 /coverage
 
+# dev
+venv/
+
 # production
 /build
 
 # misc
 .DS_Store
+.env
 .env.local
 .env.development.local
 .env.test.local
@@ -21,3 +25,8 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+zappa_settings.json*
+zappa_settings.json
+430backend-dev-template-1733244959.json
+backend430-dev-1733258741.zip
