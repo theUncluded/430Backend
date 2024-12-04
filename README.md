@@ -1,4 +1,4 @@
-# Backend Project README
+# CSC 430: Software Engineering Final Project (Backend) README
 
 ## Overview
 
