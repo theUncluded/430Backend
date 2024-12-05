@@ -356,29 +356,40 @@ def remove_x_from_product_stock(x , product_id):
 
 #utilizes an api call to get req the passed product name's rating and total amount of reviews
 def find_rating(p_name):
-    result = api_request.request_product_rating(p_name)
-    rating = result["data"]["products"][0]["product_star_rating"]
-    no_of_ratings = result["data"]["products"][0]["product_num_ratings"]
-    rating_dict = {"rating" : rating , "num_of_ratings" : no_of_ratings}
-    return rating_dict
+    try:
+        result = api_request.request_product_rating(p_name)
+        rating = result["data"]["products"][0]["product_star_rating"]
+        no_of_ratings = result["data"]["products"][0]["product_num_ratings"]
+        return {"rating": rating, "num_of_ratings": no_of_ratings}
+    except Exception as e:
+        print(f"Error fetching rating: {e}")
+        # Return default values when the API call fails
+        return {"rating": 0, "num_of_ratings": 0}
+
 
 #add a new product to database via passed product parameters. Make sure to use exact amazon name (<=100 char) when creating new product for most optimal ratings
-def add_new_product(p_name , p_price , p_stock, category):
+def add_new_product(cursor, p_name, p_price, p_stock, category):
+    # Fetch product ratings
     ratings = find_rating(p_name)
-
     score = ratings["rating"]
     no_of_ratings = ratings["num_of_ratings"]
 
-    INS_INTO_QUERY = f'''
-    INSERT INTO product (product_name , price , stock , rating, num_rating, category)
-    VALUES ({p_name} , {p_price} , {p_stock} , {score} , {no_of_ratings} , {category})
+    # Define the SQL query using placeholders to prevent SQL injection
+    INS_INTO_QUERY = '''
+    INSERT INTO product (product_name, price, stock, rating, num_rating, category)
+    VALUES (%s, %s, %s, %s, %s, %s)
     '''
 
     try:
-        cursor.execute(INS_INTO_QUERY)
+        cursor.execute(INS_INTO_QUERY, (p_name, p_price, p_stock, score, no_of_ratings, category))
+        cursor.connection.commit()  # Commit the transaction
         print("Product insertion successful")
+        return {"success": True, "message": "Product added successfully"}
     except Exception as e:
-        print(e)
+        print(f"Error inserting product: {e}")
+        cursor.connection.rollback()  # Rollback the transaction on error
+        return {"success": False, "message": f"Error adding product: {str(e)}"}
+
 
 # change product price with product id and new price arguments
 def price_manip(p_id , new_price):

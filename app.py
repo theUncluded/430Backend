@@ -11,10 +11,16 @@ pymysql.install_as_MySQLdb()
 #adds project root to system path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-
 # --------- Flask & CORS ---------
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}) #allow all
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response
 
 mysql = MySQL(app)
 
@@ -29,16 +35,29 @@ def admin_panel():
     return render_template('admin_panel.html')
 
 @app.route('/add_product', methods=['POST'])
-def add_new_product():
+def add_new_product_route():
+    # Log incoming request details for debugging
+    print(f"Headers: {request.headers}")
+    print(f"Body: {request.data}")
+    
+    try:
+        data = request.json  # Parse JSON from request
+        if not data:
+            return jsonify({"error": "Invalid JSON format"}), 400
+        
+        p_name = data.get("new_p_name")
+        p_price = data.get("new_p_price")
+        p_stock = data.get("new_p_stock")
+        p_cat = data.get("new_p_cat")
+        
+        if not all([p_name, p_price, p_stock, p_cat]):
+            return jsonify({"error": "Missing required fields"}), 400
 
-    cursor = functions.cursor
-
-    data = request.json
-    p_name = data.get("new_p_name")
-    p_price = data.get("new_p_price")
-    p_stock = data.get("new_p_stock")
-    p_cat = data.get("new_p_cat")
-    return functions.add_new_product(p_name , p_price , p_stock, p_cat)
+        # Pass the data to the function
+        return functions.add_new_product(p_name, p_price, p_stock, p_cat)
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        return jsonify({"error": "An error occurred", "details": str(e)}), 500
 
 @app.route('/change_name', methods=['POST'])
 def change_p_name():
@@ -199,4 +218,4 @@ ________________________________________________________________________________
 
 # ======================= DEBUG ==========================
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host='0.0.0.0', port=8080, debug=True)
