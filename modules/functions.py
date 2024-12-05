@@ -34,12 +34,13 @@ print(f"Database Host: {host}, User: {user}, DB Name: {database_name}")
 #-----------DB CONN----------
 def get_db_connection():
     try:
-        return mysql.connector.connect(
+        connection = mysql.connector.connect(
             host=os.getenv("DB_HOST"),
             user=os.getenv("DB_USERNAME"),
             password=os.getenv("DB_PASSWORD"),
             database=os.getenv("DB_NAME")
         )
+        return connection
     except mysql.connector.Error as e:
         print(f"Error connecting to database: {e}")
         return None
@@ -63,29 +64,32 @@ def pull_products(mysql):
 # ======================= Cart Functions ==========================
 #assign user to cart table, try NOT to thread this with other existing carts
 def assign_to_cart(users_id):
-    connection = get_db_connection()
-    if not connection:
-        return jsonify({"error": "Database connection failed"}), 500
     try:
-        cursor = connection.cursor(dictionary=True)
-        # Check if user has a cart
-        select_query = "SELECT cart_id FROM cart WHERE users_id = %s LIMIT 1"
-        cursor.execute(select_query, (users_id,))
-        cart_id = cursor.fetchone()
-        
-        # If a cart exists, return the cart id
-        if cart_id:
-            return cart_id[0]
-        
-        # If no cart exists, create a new one for the user
-        insert_query = "INSERT INTO cart (users_id) VALUES (%s)"
-        cursor.execute(insert_query, (users_id,))
-        mydb.commit()
-        return cursor.lastrowid  # Return the newly created cart ID
+        with get_db_connection() as connection:
+            cursor = connection.cursor(dictionary=True)
 
-    except Exception as e:
-        print(f"Error in assign_to_cart: {e}")
+            # Check if user has a cart
+            select_query = "SELECT cart_id FROM cart WHERE users_id = %s LIMIT 1"
+            cursor.execute(select_query, (users_id,))
+            cart_id = cursor.fetchone()
+            
+            # If a cart exists, return the cart id
+            if cart_id:
+                return cart_id['cart_id']
+            
+            # If no cart exists, create a new one for the user
+            insert_query = "INSERT INTO cart (users_id) VALUES (%s)"
+            cursor.execute(insert_query, (users_id,))
+            connection.commit()
+            return cursor.lastrowid  # Return the newly created cart ID
+
+    except mysql.connector.Error as e:
+        print(f"Database error in assign_to_cart: {e}")
         return None
+    except Exception as e:
+        print(f"General error in assign_to_cart: {e}")
+        return None
+
 
 #updates the current cart to be the most recently created cart
 def current_cart_db_update(users_email):
@@ -135,7 +139,7 @@ def save_cart(user_id, cart_items):
             
             cursor.execute(insert_query, (cart_id, product_id, quantity))
 
-        mydb.commit()
+        connection.commit()
         print("Cart saved successfully.")
         return jsonify({"success": True, "message": "Cart saved successfully"}), 200
 
@@ -205,6 +209,8 @@ def hash_password(password):
 
 # Function to create a cart and update current cart given a users id.
 def create_cart_for_user(users_id):
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)    
     q3 = "INSERT INTO cart (users_id) VALUES (%s);"
     q4 = """
         UPDATE users 
@@ -229,48 +235,77 @@ def create_user(input_name, input_email, input_password):
     select_user_id_query = """
         SELECT users_id FROM users WHERE users_email = %s;
     """
+    
+    check_email_query = """
+        SELECT COUNT(*) FROM users WHERE users_email = %s;
+    """
 
     try:
-        # Start transaction
-        cursor.execute("START TRANSACTION;")
-        
-        # Insert new user and handle duplicate emails
-        cursor.execute(insert_user_query, (input_name, input_email, input_password))
-        
-        # Retrieve the new user's ID
-        cursor.execute(select_user_id_query, (input_email,))
-        result = cursor.fetchone()
-        
-        if not result:
-            raise ValueError("Account creation failed: EMAIL IN USE. Please login.")
-        
-        current_users_id = result[0]
-        
-        # Create a cart for the new user
-        create_cart_for_user(current_users_id)
-        
-        # Commit the transaction
-        mydb.commit()
+        # Create a new connection for this request
+        with get_db_connection() as connection:
+            cursor = connection.cursor(dictionary=True)
+            
+            # Check if the email already exists
+            cursor.execute(check_email_query, (input_email,))
+            result = cursor.fetchone()
+            if result and result['COUNT(*)'] > 0:
+                print(f"Error: Email {input_email} already exists.")
+                return None  # Email already exists, return None
 
-        return current_users_id  # Optionally use this for automatic login
-        
-    except Exception as e:
-        print(f"Error: {e}")
+            print("Starting transaction...")
+            cursor.execute("START TRANSACTION;")
+            
+            # Insert new user
+            print(f"Inserting user: {input_name}, {input_email}")
+            cursor.execute(insert_user_query, (input_name, input_email, input_password))
+            
+            # Retrieve the new user's ID
+            cursor.execute(select_user_id_query, (input_email,))
+            result = cursor.fetchone()
+            
+            if not result:
+                print("Error: Account creation failed, user ID not found.")
+                raise ValueError("Account creation failed.")
+            
+            current_users_id = result['users_id']
+            
+            # Commit the transaction
+            connection.commit()
+            print(f"User created successfully with ID: {current_users_id}")
+
+            return current_users_id  # Return the new user ID
+
+    except mysql.connector.Error as e:
+        print(f"Database error: {e}")
+        if 'connection' in locals():
+            connection.rollback()  # Rollback if there is an error
         return None
+    except Exception as e:
+        print(f"General error: {e}")
+        return None
+
 
 
 def check_password(password, hashed_password):
     return bcrypt.checkpw(password.encode('utf-8'), hashed_password)#turns the password into binary and then compares it with the hashed password
 
-def u_login(email, password):
+def u_login(email, password, cursor):
     EMAIL_QUERY = "SELECT users_id, users_name, users_password FROM users WHERE users_email = %s;"
 
     try:
-        # fetch details
         cursor.execute(EMAIL_QUERY, (email,))
         result = cursor.fetchone()
+        
         if result:
-            users_id, users_name, stored_hashed_password = result
+            print("User found:", result)  # Debugging the result from DB
+            users_id = result['users_id']
+            users_name = result['users_name']
+            stored_hashed_password = result['users_password']
+            print(f'{users_id}, {users_name}, {stored_hashed_password}' )
+            print(f"Stored hashed password: {stored_hashed_password}")  # Debugging the stored password from DB
+            print(f"Password (input): {password.encode('utf-8')}")
+            print(f"Stored password (encoded): {stored_hashed_password.encode('utf-8')}")
+            
             if bcrypt.checkpw(password.encode('utf-8'), stored_hashed_password.encode('utf-8')):
                 return jsonify({
                     "success": True,
@@ -279,14 +314,11 @@ def u_login(email, password):
                     "user_name": users_name  
                 })
             else:
-
                 return jsonify({"success": False, "message": "Invalid password."})
         else:
-
-            return jsonify({"success": False, "message": ERROR_EMAIL_NOTFOUND % email})
+            return jsonify({"success": False, "message": f"EMAIL {email} NOT FOUND IN OUR SYSTEM. PLEASE REGISTER OR USE A DIFFERENT EMAIL"})
 
     except Exception as e:
-
         print(f"Error in u_login: {e}")
         return jsonify({"success": False, "message": "An error occurred during login."})
 
@@ -297,9 +329,18 @@ def authenticate_user(data):
     password = data.get('password')
     is_registering = data.get('isRegistering', False)  # register flag
 
+    # Get DB connection
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({"error": "Database connection failed"}), 500
+
+    # Create cursor
+    cursor = connection.cursor(dictionary=True)
+
     if is_registering:
         # Register new user
         name = data.get('name', 'New User')
+        print(data)
         user_id = create_user(name, email, password)
         if user_id:
             return jsonify({"success": True, "message": "Registration successful!", "user_id": user_id})
@@ -307,7 +348,8 @@ def authenticate_user(data):
             return jsonify({"success": False, "message": "Registration failed, email might be in use."})
     else:
         # Log in existing user
-        return u_login(email, password)
+        return u_login(email, password, cursor)  # Pass cursor to u_login()
+
 
     
 # ======================= Admin Functionalities ==========================
@@ -316,6 +358,8 @@ def authenticate_user(data):
 def add_x_to_product_stock(x,product_id):
     GET_CURR_STOCK_QUERY = f'select stock from product where product_id = {product_id};'
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True) 
         cursor.execute(GET_CURR_STOCK_QUERY)
         curr_stock = cursor.fetchone()[0]
     except:
@@ -338,6 +382,8 @@ def add_x_to_product_stock(x,product_id):
 def remove_x_from_product_stock(x , product_id):
     GET_CURR_STOCK_QUERY = f'select stock from product where product_id = {product_id};'
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True) 
         cursor.execute(GET_CURR_STOCK_QUERY)
         curr_stock = cursor.fetchone()[0]
     except:
@@ -375,10 +421,33 @@ def add_new_product(p_name , p_price , p_stock, category):
     '''
 
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True) 
         cursor.execute(INS_INTO_QUERY)
         print("Product insertion successful")
     except Exception as e:
         print(e)
+
+
+def update_product(p_id, new_name, new_price, new_stock):
+    UPDATE_QUERY = """
+        UPDATE product
+        SET product_name = %s, price = %s, stock = %s
+        WHERE product_id = %s;
+    """
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(UPDATE_QUERY, (new_name, new_price, new_stock, p_id))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        return jsonify({"success": True, "message": "Product updated"})
+    except Exception as e:
+        print(f"Error while updating product: {e}")
+        return jsonify({"success": False, "message": "Failed to update product"})
+
 
 # change product price with product id and new price arguments
 def price_manip(p_id , new_price):
@@ -388,6 +457,8 @@ def price_manip(p_id , new_price):
     WHERE product_id = %i};
     """
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True) 
         cursor.execute(QUERY, (new_price,p_id))
         print("Price update successful!")
     except Exception as e:
@@ -402,6 +473,8 @@ def product_name_change(p_id , new_name):
     """
 
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)         
         cursor.execute(QUERY, (new_name,p_id))
         print("Name update successful!")
     except Exception as e:

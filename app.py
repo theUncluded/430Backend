@@ -47,6 +47,24 @@ def change_p_name():
     new_name = data.get("new_name")
     return functions.product_name_change(p_id , new_name)
 
+@app.route('/admin/update', methods=['POST'])
+def update_product():
+    try:    # Get the data from the request
+        data = request.json
+        p_id = data.get("product_id")  # Product ID
+        new_name = data.get("new_name")  # New name for the product
+        new_price = data.get("new_price")  # New price
+        new_stock = data.get("new_stock")  # New stock quantity
+
+        # Call the function to update the product
+        
+
+        # Return the response
+        return functions.update_product(p_id, new_name, new_price, new_stock)
+    except Exception as e:
+            print(f"Error in /admin/update route: {e}")
+            return jsonify({"success": False, "message": "Failed to update product."}), 500
+
 @app.route('/change_price', methods=['POST'])
 def change_price():
     data = request.json
