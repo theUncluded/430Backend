@@ -1,4 +1,4 @@
-# Backend Project README
+# CSC 430: Software Engineering Final Project (Backend) README
 
 ## Overview
 
@@ -98,7 +98,7 @@ Ensure your MySQL database is set up and contains the required schema for tables
 
 ## Deployment with Zappa
 
-### 1. Configure `zappa_settings.json`
+### 1. Configure a `zappa_settings.json`
 Create a `zappa_settings.json` file with the following structure:
 ```json
 {
@@ -136,6 +136,7 @@ zappa update dev
 ### 4. Test API
 Visit the API Gateway endpoint URL provided by Zappa to verify deployment.
 
+Utilize tools such as Postman to test backend endpoints.
 ---
 
 ## API Endpoints
@@ -172,9 +173,6 @@ Visit the API Gateway endpoint URL provided by Zappa to verify deployment.
 
 2. **Database Connection Issues**
    - Always verify MySQL credentials first, then check for connection allowance from your development machine or Lambda's IP.
-
-3. **Module Import Errors**
-   - Ensure all required modules are installed and properly referenced in the project structure.
 
 ---
 
