@@ -417,18 +417,20 @@ def add_new_product(p_name , p_price , p_stock, category):
 
     INS_INTO_QUERY = f'''
     INSERT INTO product (product_name , price , stock , rating, num_rating, category)
-    VALUES ({p_name} , {p_price} , {p_stock} , {score} , {no_of_ratings} , {category})
+    VALUES (%s , %s , %s , %s , %s , %s)
     '''
 
     try:
         connection = get_db_connection()
-        cursor = connection.cursor(dictionary=True) 
-        cursor.execute(INS_INTO_QUERY)
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(INS_INTO_QUERY, (p_name, p_price, p_stock, score, no_of_ratings, category))
+        connection.commit()
         print("Product insertion successful")
+        return True, "Product insertion successful"  # Success case
     except Exception as e:
-        print(e)
-
-
+        print(f"Error inserting product: {e}")
+        return False, str(e)  # Error case with the error message
+    
 def update_product(p_id, new_name, new_price, new_stock):
     UPDATE_QUERY = """
         UPDATE product

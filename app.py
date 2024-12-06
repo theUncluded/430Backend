@@ -30,15 +30,23 @@ def admin_panel():
 
 @app.route('/add_product', methods=['POST'])
 def add_new_product():
-
-    cursor = functions.cursor
-
     data = request.json
     p_name = data.get("new_p_name")
     p_price = data.get("new_p_price")
     p_stock = data.get("new_p_stock")
     p_cat = data.get("new_p_cat")
-    return functions.add_new_product(p_name , p_price , p_stock, p_cat)
+
+    try:
+        success, message = functions.add_new_product(p_name, p_price, p_stock, p_cat)
+
+        if success:
+            return jsonify({"success": True, "message": "Product added successfully"}), 200
+        else:
+            return jsonify({"success": False, "message": message}), 500
+
+    except Exception as e:
+        print(f"Error adding product: {e}")
+        return jsonify({"success": False, "message": "An error occurred while adding the product."}), 500
 
 @app.route('/change_name', methods=['POST'])
 def change_p_name():
