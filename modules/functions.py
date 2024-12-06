@@ -80,7 +80,7 @@ def assign_to_cart(users_id):
         # If no cart exists, create a new one for the user
         insert_query = "INSERT INTO cart (users_id) VALUES (%s)"
         cursor.execute(insert_query, (users_id,))
-        mydb.commit()
+        connection.commit()
         return cursor.lastrowid  # Return the newly created cart ID
 
     except Exception as e:
@@ -135,7 +135,7 @@ def save_cart(user_id, cart_items):
             
             cursor.execute(insert_query, (cart_id, product_id, quantity))
 
-        mydb.commit()
+        connection.commit()
         print("Cart saved successfully.")
         return jsonify({"success": True, "message": "Cart saved successfully"}), 200
 
@@ -205,18 +205,33 @@ def hash_password(password):
 
 # Function to create a cart and update current cart given a users id.
 def create_cart_for_user(users_id):
-    q3 = "INSERT INTO cart (users_id) VALUES (%s);"
-    q4 = """
-        UPDATE users 
-        SET current_cart_id = (SELECT MAX(cart_id) FROM cart WHERE cart.users_id = users.users_id)
-        WHERE users_id = %s;
-    """
-    cursor.execute(q3,(users_id,))
-    cursor.execute(q4,(users_id,))
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({"error": "Database connection failed"}), 500
+    
+    try:
+        cursor = connection.cursor(dictionary=True)
+        q3 = "INSERT INTO cart (users_id) VALUES (%s);"
+        q4 = """
+            UPDATE users 
+            SET current_cart_id = (SELECT MAX(cart_id) FROM cart WHERE cart.users_id = users.users_id)
+            WHERE users_id = %s;
+        """
+        cursor.execute(q3,(users_id,))
+        cursor.execute(q4,(users_id,))
+    except Exception as e:
+        print(f"Failed to create cart for user. Error: {e}")
     # DO NOT PUT A COMIT IN FUNCTION. We only create a new cart for a user, when a new user is created, or if the users previous cart has been used for a sale.
     # The comit will occur within those functions!
 
 def create_user(input_name, input_email, input_password):
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({"error": "Database connection failed"}), 500
+    try:
+        cursor = connection.cursor(dictionary=True)
+    except Exception as e:
+        print(f"Error! Failed to connect to database cursor. Error: {e}")
     # Hash the password
     input_password = hash_password(input_password).decode('utf-8')  # Decode to store as string
 
@@ -250,7 +265,7 @@ def create_user(input_name, input_email, input_password):
         create_cart_for_user(current_users_id)
         
         # Commit the transaction
-        mydb.commit()
+        connection.commit()
 
         return current_users_id  # Optionally use this for automatic login
         
@@ -263,6 +278,14 @@ def check_password(password, hashed_password):
     return bcrypt.checkpw(password.encode('utf-8'), hashed_password)#turns the password into binary and then compares it with the hashed password
 
 def u_login(email, password):
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({"error": "Database connection failed"}), 500
+    try:
+        cursor = connection.cursor(dictionary=True)
+    except Exception as e:
+        print(f"Error! Failed to connect to database cursor. Error: {e}")
+
     EMAIL_QUERY = "SELECT users_id, users_name, users_password FROM users WHERE users_email = %s;"
 
     try:
@@ -293,6 +316,7 @@ def u_login(email, password):
 #login and register
 
 def authenticate_user(data):
+    
     email = data.get('email')
     password = data.get('password')
     is_registering = data.get('isRegistering', False)  # register flag
@@ -314,6 +338,14 @@ def authenticate_user(data):
 
 #adds a x amount of stock to a product - allocated by its id
 def add_x_to_product_stock(x,product_id):
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({"error": "Database connection failed"}), 500
+    try:
+        cursor = connection.cursor(dictionary=True)
+    except Exception as e:
+        print(f"Error! Failed to connect to database cursor. Error: {e}")
+
     GET_CURR_STOCK_QUERY = f'select stock from product where product_id = {product_id};'
     try:
         cursor.execute(GET_CURR_STOCK_QUERY)
@@ -336,6 +368,13 @@ def add_x_to_product_stock(x,product_id):
 
 #removes a n amount of stock from a product
 def remove_x_from_product_stock(x , product_id):
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({"error": "Database connection failed"}), 500
+    try:
+        cursor = connection.cursor(dictionary=True)
+    except Exception as e:
+        print(f"Error! Failed to connect to database cursor. Error: {e}")
     GET_CURR_STOCK_QUERY = f'select stock from product where product_id = {product_id};'
     try:
         cursor.execute(GET_CURR_STOCK_QUERY)
@@ -368,52 +407,75 @@ def find_rating(p_name):
 
 
 #add a new product to database via passed product parameters. Make sure to use exact amazon name (<=100 char) when creating new product for most optimal ratings
-def add_new_product(cursor, p_name, p_price, p_stock, category):
-    # Fetch product ratings
-    ratings = find_rating(p_name)
-    score = ratings["rating"]
-    no_of_ratings = ratings["num_of_ratings"]
+def add_new_product(p_name, p_price, p_stock, category):
 
-    # Define the SQL query using placeholders to prevent SQL injection
-    INS_INTO_QUERY = '''
-    INSERT INTO product (product_name, price, stock, rating, num_rating, category)
-    VALUES (%s, %s, %s, %s, %s, %s)
-    '''
-
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({"error": "Database connection failed"}), 500
+    
     try:
-        cursor.execute(INS_INTO_QUERY, (p_name, p_price, p_stock, score, no_of_ratings, category))
-        cursor.connection.commit()  # Commit the transaction
-        print("Product insertion successful")
-        return {"success": True, "message": "Product added successfully"}
+        cursor = connection.cursor(dictionary=True)
+        # Fetch product ratings
+        ratings = find_rating(p_name)
+        score = ratings["rating"]
+        no_of_ratings = ratings["num_of_ratings"]
+
+        # Define the SQL query using placeholders to prevent SQL injection
+        INS_INTO_QUERY = '''
+        INSERT INTO product (product_name, price, stock, rating, num_rating, category)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        '''
+
+        try:
+            cursor.execute(INS_INTO_QUERY, (p_name, p_price, p_stock, score, no_of_ratings, category))
+            connection.commit()  # Commit the transaction
+            print("Product insertion successful")
+            return {"success": True, "message": "Product added successfully"}
+        except Exception as e:
+            print(f"Error inserting product: {e}")
+            connection.rollback()  # Rollback the transaction on error
+            return {"success": False, "message": f"Error adding product: {str(e)}"}
     except Exception as e:
-        print(f"Error inserting product: {e}")
-        cursor.connection.rollback()  # Rollback the transaction on error
-        return {"success": False, "message": f"Error adding product: {str(e)}"}
+        print(f"Error connecting to database: {e}")
 
 
 # change product price with product id and new price arguments
 def price_manip(p_id , new_price):
-    QUERY = """
-    UPDATE product
-    SET price = %d
-    WHERE product_id = %i};
-    """
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({"error": "Database connection failed"}), 500
     try:
-        cursor.execute(QUERY, (new_price,p_id))
-        print("Price update successful!")
+        cursor = connection.cursor(dictionary=True)
+        QUERY = """
+        UPDATE product
+        SET price = %d
+        WHERE product_id = %i};
+        """
+        try:
+            cursor.execute(QUERY, (new_price,p_id))
+            print("Price update successful!")
+        except Exception as e:
+            print(e)
     except Exception as e:
-        print(e)
+            print(f"Error connecting to the database: {e}")
 
 # change the name of a product in the database via a reference to its id
 def product_name_change(p_id , new_name):
-    QUERY ="""
-    UPDATE product
-    SET product_name = %s
-    WHERE product_id = %i;
-    """
-
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({"error": "Database connection failed"}), 500
     try:
-        cursor.execute(QUERY, (new_name,p_id))
-        print("Name update successful!")
+        cursor = connection.cursor(dictionary=True)
+        QUERY ="""
+        UPDATE product
+        SET product_name = %s
+        WHERE product_id = %i;
+        """
+
+        try:
+            cursor.execute(QUERY, (new_name,p_id))
+            print("Name update successful!")
+        except Exception as e:
+            print(e)
     except Exception as e:
-        print(e)
+        print(f"Error when connecting to the database: {e}")

@@ -36,12 +36,13 @@ def admin_panel():
 
 @app.route('/add_product', methods=['POST'])
 def add_new_product_route():
-    # Log incoming request details for debugging
+    # Logs for incoming request details for debugging
     print(f"Headers: {request.headers}")
     print(f"Body: {request.data}")
     
     try:
         data = request.json  # Parse JSON from request
+
         if not data:
             return jsonify({"error": "Invalid JSON format"}), 400
         
