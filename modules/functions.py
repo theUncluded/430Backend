@@ -52,8 +52,10 @@ def pull_products(mysql):
         cursor = connection.cursor(dictionary=True)  # Use dictionary=True for row dicts
         cursor.execute("SELECT * FROM product;")
         result = cursor.fetchall()
+        connection.commit()
         return jsonify(result), 200
     except Exception as e:
+        connection.rollback()
         print(f"Error in pull_products: {e}")
         return jsonify({"error": "Failed to fetch products"}), 500
     finally:
@@ -140,6 +142,7 @@ def save_cart(user_id, cart_items):
         return jsonify({"success": True, "message": "Cart saved successfully"}), 200
 
     except Exception as e:
+        connection.rollback()
         print(f"Error in save_cart function: {e}")
         return jsonify({"success": False, "message": "Failed to save cart"}), 500
 
@@ -164,10 +167,11 @@ def get_cart(user_id):
         cursor.execute(select_query, (cart_id,))
         result = cursor.fetchall()
         cart_items = [{"product_id": row[0], "quantity": row[1]} for row in result]
-        
+        connection.commit()
         return jsonify(cart_items), 200
     except Exception as e:
         print(f"Error retrieving cart: {e}")
+        connection.rollback()
         return jsonify({"success": False, "message": "Failed to retrieve cart"}), 500
     
 def checkout(user_id, cart_items):
@@ -257,6 +261,7 @@ def create_user(input_name, input_email, input_password):
         result = cursor.fetchone()
         
         if not result:
+            connection.rollback()
             raise ValueError("Account creation failed: EMAIL IN USE. Please login.")
         
         current_users_id = result[0]
@@ -270,6 +275,7 @@ def create_user(input_name, input_email, input_password):
         return current_users_id  # Optionally use this for automatic login
         
     except Exception as e:
+        connection.rollback()
         print(f"Error: {e}")
         return None
 
@@ -292,6 +298,7 @@ def u_login(email, password):
         # fetch details
         cursor.execute(EMAIL_QUERY, (email,))
         result = cursor.fetchone()
+        connection.commit()
         if result:
             users_id, users_name, stored_hashed_password = result
             if bcrypt.checkpw(password.encode('utf-8'), stored_hashed_password.encode('utf-8')):
@@ -351,6 +358,7 @@ def add_x_to_product_stock(x,product_id):
         cursor.execute(GET_CURR_STOCK_QUERY)
         curr_stock = cursor.fetchone()[0]
     except:
+        connection.rollback()
         print("Failed to update value, please double check passed product_id")
     
     updated_stock = curr_stock + x
@@ -361,7 +369,9 @@ def add_x_to_product_stock(x,product_id):
     '''
     try:
         cursor.execute(QUERY)
+        connection.commit()
     except:
+        connection.rollback()
         print("Addition statement failed! Reference database if issue persists")
 
     return updated_stock
@@ -380,6 +390,7 @@ def remove_x_from_product_stock(x , product_id):
         cursor.execute(GET_CURR_STOCK_QUERY)
         curr_stock = cursor.fetchone()[0]
     except:
+        connection.rollback()
         print("Failed to update value, please double check passed product_id")
 
     new_stock = curr_stock - x
@@ -390,7 +401,9 @@ def remove_x_from_product_stock(x , product_id):
     '''
     try:
         cursor.execute(QUERY)
+        connection.commit()
     except Exception as e:
+        connection.rollback()
         print(e)
 
 #utilizes an api call to get req the passed product name's rating and total amount of reviews
@@ -453,8 +466,10 @@ def price_manip(p_id , new_price):
         """
         try:
             cursor.execute(QUERY, (new_price,p_id))
+            connection.commit()
             print("Price update successful!")
         except Exception as e:
+            connection.rollback()
             print(e)
     except Exception as e:
             print(f"Error connecting to the database: {e}")
@@ -474,8 +489,10 @@ def product_name_change(p_id , new_name):
 
         try:
             cursor.execute(QUERY, (new_name,p_id))
+            connection.commit()
             print("Name update successful!")
         except Exception as e:
+            connection.rollback()
             print(e)
     except Exception as e:
         print(f"Error when connecting to the database: {e}")
