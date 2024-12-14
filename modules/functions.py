@@ -99,10 +99,10 @@ def current_cart_db_update(users_email):
     
     MOST_RECENT_CART_QUERY = f"""update users
     set current_cart_id = (select max(cart_id) from cart where cart.users_id = users.users_id)
-    where users_email = {users_email}
+    where users_email = %s
     """
 
-    cursor.execute(MOST_RECENT_CART_QUERY)
+    cursor.execute(MOST_RECENT_CART_QUERY,(users_email,))
 
 def save_cart(user_id, cart_items):
     connection = get_db_connection()
@@ -353,9 +353,9 @@ def add_x_to_product_stock(x,product_id):
     except Exception as e:
         print(f"Error! Failed to connect to database cursor. Error: {e}")
 
-    GET_CURR_STOCK_QUERY = f'select stock from product where product_id = {product_id};'
+    GET_CURR_STOCK_QUERY = f'select stock from product where product_id = %s;'
     try:
-        cursor.execute(GET_CURR_STOCK_QUERY)
+        cursor.execute(GET_CURR_STOCK_QUERY,(product_id,))
         curr_stock = cursor.fetchone()[0]
     except:
         connection.rollback()
@@ -364,11 +364,11 @@ def add_x_to_product_stock(x,product_id):
     updated_stock = curr_stock + x
     QUERY = f'''
     update product 
-    set stock = {updated_stock}
-    where product_id = {product_id}
+    set stock = %s
+    where product_id = %s
     '''
     try:
-        cursor.execute(QUERY)
+        cursor.execute(QUERY,(updated_stock,product_id))
         connection.commit()
     except:
         connection.rollback()
@@ -385,9 +385,9 @@ def remove_x_from_product_stock(x , product_id):
         cursor = connection.cursor(dictionary=True)
     except Exception as e:
         print(f"Error! Failed to connect to database cursor. Error: {e}")
-    GET_CURR_STOCK_QUERY = f'select stock from product where product_id = {product_id};'
+    GET_CURR_STOCK_QUERY = f'select stock from product where product_id = %s;'
     try:
-        cursor.execute(GET_CURR_STOCK_QUERY)
+        cursor.execute(GET_CURR_STOCK_QUERY,(product_id,))
         curr_stock = cursor.fetchone()[0]
     except:
         connection.rollback()
@@ -396,11 +396,11 @@ def remove_x_from_product_stock(x , product_id):
     new_stock = curr_stock - x
     QUERY = f'''
     update product 
-    set stock = {new_stock}
-    where product_id = {product_id}
+    set stock = %s
+    where product_id = %s
     '''
     try:
-        cursor.execute(QUERY)
+        cursor.execute(QUERY,(new_stock,product_id))
         connection.commit()
     except Exception as e:
         connection.rollback()
