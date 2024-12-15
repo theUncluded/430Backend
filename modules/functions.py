@@ -69,7 +69,7 @@ def assign_to_cart(users_id):
             cursor = connection.cursor(dictionary=True)
 
             # Check if user has a cart
-            select_query = "SELECT cart_id FROM cart WHERE users_id = $s order by cart_id desc limit 1;"
+            select_query = "SELECT cart_id FROM cart WHERE users_id = $s order by cart_id desc;"
             cursor.execute(select_query, (users_id,))
             cart_id = cursor.fetchone()
             
