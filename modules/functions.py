@@ -434,10 +434,10 @@ def add_new_product(p_name, p_price, p_stock, category):
         no_of_ratings = ratings["num_of_ratings"]
 
         # Define the SQL query using placeholders to prevent SQL injection
-        INS_INTO_QUERY = '''
+        INS_INTO_QUERY = """
         INSERT INTO product (product_name, price, stock, rating, num_rating, category)
         VALUES (%s, %s, %s, %s, %s, %s);
-        '''
+        """
 
         try:
             cursor.execute(INS_INTO_QUERY, (p_name, p_price, p_stock, score, no_of_ratings, category))
