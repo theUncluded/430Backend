@@ -240,7 +240,7 @@ def checkout(user_id, cart_items):
                 cursor.execute("ROLLBACK;")
                 return jsonify({"success": False, "message": f"Insufficient stock for product ID {product_id}."})
 
-        cursor.execute(q3,(assign_to_cart(),Credit,total_cost))
+        cursor.execute(q3,(assign_to_cart(user_id),Credit,total_cost))
         create_cart_for_user(user_id)
         cursor.execute("COMMIT;")
         print("Checkout transaction committed successfully.")
