@@ -69,7 +69,7 @@ def assign_to_cart(users_id):
             cursor = connection.cursor(dictionary=True)
 
             # Check if user has a cart
-            select_query = "SELECT cart_id FROM cart WHERE users_id = %s LIMIT 1"
+            select_query = "SELECT max(cart_id) FROM cart WHERE users_id = %s LIMIT 1"
             cursor.execute(select_query, (users_id,))
             cart_id = cursor.fetchone()
             
@@ -203,8 +203,11 @@ def checkout(user_id, cart_items):
         return jsonify({"error": "Database connection failed"}), 500
     try:
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("START TRANSACTION;")        
-
+        cursor.execute("set transaction isolation level serializable")
+        cursor.execute("START TRANSACTION;")
+        q3 = "insert into sale (cart_id,payment_method,total_amount) values(%s,%s,%s)"
+        total_cost = 0
+                
         for item in cart_items:
             product_id = item.get('product_id')
             quantity = item.get('quantity')
@@ -215,8 +218,13 @@ def checkout(user_id, cart_items):
 
             cursor.execute("SELECT stock FROM product WHERE product_id = %s for update;", (product_id,))
             stock_row = cursor.fetchone()
+            cursor.execute("select price from product where product_id = %s;",(product_id,))
+            product_price = cursor.fetchone()
 
             if not stock_row:
+                print(f"Product ID {product_id} not found in the database.")
+                raise ValueError(f"Product ID {product_id} not found.")
+            if not product_price:
                 print(f"Product ID {product_id} not found in the database.")
                 raise ValueError(f"Product ID {product_id} not found.")
 
@@ -224,6 +232,7 @@ def checkout(user_id, cart_items):
             print(f"Stock for product {product_id}: {stock}")
 
             if stock >= quantity:
+                total_cost = total_cost + (product_price * quantity)
                 new_stock = stock - quantity
                 cursor.execute("UPDATE product SET stock = %s WHERE product_id = %s;", (new_stock, product_id))
                 print(f"Updated stock for product {product_id}: {new_stock}")
@@ -232,6 +241,8 @@ def checkout(user_id, cart_items):
                 cursor.execute("ROLLBACK;")
                 return jsonify({"success": False, "message": f"Insufficient stock for product ID {product_id}."})
 
+        cursor.execute(q3,(assign_to_cart(),Credit,total_cost))
+        create_cart_for_user(user_id)
         cursor.execute("COMMIT;")
         print("Checkout transaction committed successfully.")
         return jsonify({"success": True, "message": "Checkout successful!"})
