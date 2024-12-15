@@ -71,7 +71,7 @@ def assign_to_cart(users_id):
     try:
         cursor = connection.cursor(dictionary=True)
         # Check if user has a cart
-        select_query = "SELECT cart_id FROM cart WHERE users_id = %s LIMIT 1"
+        select_query = "SELECT cart_id FROM cart WHERE users_id = %s LIMIT 1;"
         cursor.execute(select_query, (users_id,))
         cart_id = cursor.fetchone()
         
@@ -80,7 +80,7 @@ def assign_to_cart(users_id):
             return cart_id[0]
         
         # If no cart exists, create a new one for the user
-        insert_query = "INSERT INTO cart (users_id) VALUES (%s)"
+        insert_query = "INSERT INTO cart (users_id) VALUES (%s);"
         cursor.execute(insert_query, (users_id,))
         connection.commit()
         return cursor.lastrowid  # Return the newly created cart ID
@@ -97,9 +97,9 @@ def current_cart_db_update(users_email):
     
     cursor = connection.cursor(dictionary=True)
     
-    MOST_RECENT_CART_QUERY = f"""update users
+    MOST_RECENT_CART_QUERY = """update users
     set current_cart_id = (select max(cart_id) from cart where cart.users_id = users.users_id)
-    where users_email = %s
+    where users_email = %s;
     """
 
     cursor.execute(MOST_RECENT_CART_QUERY,(users_email,))
@@ -120,12 +120,12 @@ def save_cart(user_id, cart_items):
             return jsonify({"success": False, "message": "Failed to assign cart"}), 500
 
         # delete old items
-        delete_query = "DELETE FROM product_pair WHERE cart_id = %s"
+        delete_query = "DELETE FROM product_pair WHERE cart_id = %s;"
         cursor.execute(delete_query, (cart_id,))
         print(f"Cleared existing items in product_pair for cart_id: {cart_id}")
 
         # Insert updated items into product_pair
-        insert_query = "INSERT INTO product_pair (cart_id, product_id, product_amount) VALUES (%s, %s, %s)"
+        insert_query = "INSERT INTO product_pair (cart_id, product_id, product_amount) VALUES (%s, %s, %s);"
         for item in cart_items:
             product_id = item.get("product_id")
             quantity = item.get("quantity")
@@ -162,7 +162,7 @@ def get_cart(user_id):
         select_query = """
             SELECT product_id, product_amount 
             FROM product_pair 
-            WHERE cart_id = %s
+            WHERE cart_id = %s;
         """
         cursor.execute(select_query, (cart_id,))
         result = cursor.fetchall()
@@ -184,7 +184,7 @@ def checkout(user_id, cart_items):
         for item in cart_items:
             product_id = item['product_id']
             quantity = item['quantity']        
-            cursor.execute("SELECT stock FROM product WHERE product_id = %s;", (product_id,))
+            cursor.execute("SELECT stock FROM product WHERE product_id = %s for update;", (product_id,))
             stock = cursor.fetchone()[0]        
             if stock >= quantity:
                 new_stock = stock - quantity
@@ -353,7 +353,7 @@ def add_x_to_product_stock(x,product_id):
     except Exception as e:
         print(f"Error! Failed to connect to database cursor. Error: {e}")
 
-    GET_CURR_STOCK_QUERY = f'select stock from product where product_id = %s;'
+    GET_CURR_STOCK_QUERY = "select stock from product where product_id = %s for update;"
     try:
         cursor.execute(GET_CURR_STOCK_QUERY,(product_id,))
         curr_stock = cursor.fetchone()[0]
@@ -362,11 +362,11 @@ def add_x_to_product_stock(x,product_id):
         print("Failed to update value, please double check passed product_id")
     
     updated_stock = curr_stock + x
-    QUERY = f'''
+    QUERY = """
     update product 
     set stock = %s
-    where product_id = %s
-    '''
+    where product_id = %s;
+    """
     try:
         cursor.execute(QUERY,(updated_stock,product_id))
         connection.commit()
@@ -385,7 +385,7 @@ def remove_x_from_product_stock(x , product_id):
         cursor = connection.cursor(dictionary=True)
     except Exception as e:
         print(f"Error! Failed to connect to database cursor. Error: {e}")
-    GET_CURR_STOCK_QUERY = f'select stock from product where product_id = %s;'
+    GET_CURR_STOCK_QUERY = "select stock from product where product_id = %s for update;"
     try:
         cursor.execute(GET_CURR_STOCK_QUERY,(product_id,))
         curr_stock = cursor.fetchone()[0]
@@ -394,11 +394,11 @@ def remove_x_from_product_stock(x , product_id):
         print("Failed to update value, please double check passed product_id")
 
     new_stock = curr_stock - x
-    QUERY = f'''
+    QUERY = """
     update product 
     set stock = %s
-    where product_id = %s
-    '''
+    where product_id = %s;
+    """
     try:
         cursor.execute(QUERY,(new_stock,product_id))
         connection.commit()
@@ -434,10 +434,10 @@ def add_new_product(p_name, p_price, p_stock, category):
         no_of_ratings = ratings["num_of_ratings"]
 
         # Define the SQL query using placeholders to prevent SQL injection
-        INS_INTO_QUERY = '''
+        INS_INTO_QUERY = """
         INSERT INTO product (product_name, price, stock, rating, num_rating, category)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        '''
+        VALUES (%s, %s, %s, %s, %s, %s);
+        """
 
         try:
             cursor.execute(INS_INTO_QUERY, (p_name, p_price, p_stock, score, no_of_ratings, category))
@@ -462,7 +462,7 @@ def price_manip(p_id , new_price):
         QUERY = """
         UPDATE product
         SET price = %d
-        WHERE product_id = %i};
+        WHERE product_id = %i;
         """
         try:
             cursor.execute(QUERY, (new_price,p_id))
