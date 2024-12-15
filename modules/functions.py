@@ -121,7 +121,7 @@ def save_cart(user_id, cart_items):
             print("Failed to assign or retrieve cart ID.")
             return jsonify({"success": False, "message": "Failed to assign cart"}), 500
 
-        # delete old items
+        # Delete old items
         delete_query = "DELETE FROM product_pair WHERE cart_id = %s"
         cursor.execute(delete_query, (cart_id,))
         print(f"Cleared existing items in product_pair for cart_id: {cart_id}")
@@ -131,14 +131,11 @@ def save_cart(user_id, cart_items):
         for item in cart_items:
             product_id = item.get("product_id")
             quantity = item.get("quantity")
-            print(f"Attempting to insert product_id: {product_id}, quantity: {quantity}")
-            
             if not product_id or not quantity:
-                print("Invalid item data detected in cart_items:", item)
+                print("Invalid item data detected:", item)
                 continue
-            
             cursor.execute(insert_query, (cart_id, product_id, quantity))
-
+        
         connection.commit()
         print("Cart saved successfully.")
         return jsonify({"success": True, "message": "Cart saved successfully"}), 200
@@ -146,34 +143,60 @@ def save_cart(user_id, cart_items):
     except Exception as e:
         print(f"Error in save_cart function: {e}")
         return jsonify({"success": False, "message": "Failed to save cart"}), 500
+    finally:
+        cursor.close()
+        connection.close()
 
 def get_cart(user_id):
     connection = get_db_connection()
     if not connection:
         return jsonify({"error": "Database connection failed"}), 500
-    
+
     try:
         cursor = connection.cursor(dictionary=True)
-        # Get the user's cart ID
         cart_id = assign_to_cart(user_id)
+        print(f"Retrieved cart_id for user_id {user_id}: {cart_id}")
+
         if not cart_id:
             return jsonify([]), 200  # If no cart, return an empty list
 
-        #get all items that are associated with teh cart
         select_query = """
-            SELECT product_id, product_amount 
-            FROM product_pair 
-            WHERE cart_id = %s
+            SELECT 
+                product_pair.product_id, 
+                product_pair.product_amount, 
+                product.price,
+                product.product_name AS title
+            FROM 
+                product_pair 
+            JOIN 
+                product 
+            ON 
+                product_pair.product_id = product.product_id 
+            WHERE 
+                cart_id = %s
         """
         cursor.execute(select_query, (cart_id,))
         result = cursor.fetchall()
-        cart_items = [{"product_id": row[0], "quantity": row[1]} for row in result]
-        
+        print("Cart items retrieved:", result)
+
+        cart_items = [
+            {
+                "product_id": row["product_id"],
+                "quantity": row["product_amount"],
+                "price": row["price"],
+                "title": row["title"],
+            }
+            for row in result
+        ]
         return jsonify(cart_items), 200
+
     except Exception as e:
         print(f"Error retrieving cart: {e}")
         return jsonify({"success": False, "message": "Failed to retrieve cart"}), 500
-    
+    finally:
+        cursor.close()
+        connection.close()
+
 def checkout(user_id, cart_items):
     connection = get_db_connection()
     if not connection:
@@ -181,19 +204,36 @@ def checkout(user_id, cart_items):
     try:
         cursor = connection.cursor(dictionary=True)
         cursor.execute("START TRANSACTION;")        
+
         for item in cart_items:
-            product_id = item['product_id']
-            quantity = item['quantity']        
+            product_id = item.get('product_id')
+            quantity = item.get('quantity')
+
+            if not product_id or not quantity:
+                print(f"Invalid cart item: {item}")
+                raise ValueError("Invalid cart item data.")
+
             cursor.execute("SELECT stock FROM product WHERE product_id = %s;", (product_id,))
-            stock = cursor.fetchone()[0]        
+            stock_row = cursor.fetchone()
+
+            if not stock_row:
+                print(f"Product ID {product_id} not found in the database.")
+                raise ValueError(f"Product ID {product_id} not found.")
+
+            stock = stock_row['stock']
+            print(f"Stock for product {product_id}: {stock}")
+
             if stock >= quantity:
                 new_stock = stock - quantity
                 cursor.execute("UPDATE product SET stock = %s WHERE product_id = %s;", (new_stock, product_id))
+                print(f"Updated stock for product {product_id}: {new_stock}")
             else:
-        
+                print(f"Insufficient stock for product {product_id}. Needed: {quantity}, Available: {stock}")
                 cursor.execute("ROLLBACK;")
                 return jsonify({"success": False, "message": f"Insufficient stock for product ID {product_id}."})
+
         cursor.execute("COMMIT;")
+        print("Checkout transaction committed successfully.")
         return jsonify({"success": True, "message": "Checkout successful!"})
 
     except Exception as e:
