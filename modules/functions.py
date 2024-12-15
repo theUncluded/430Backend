@@ -231,7 +231,7 @@ def checkout(user_id, cart_items):
             print(f"Stock for product {product_id}: {stock}")
 
             if stock >= quantity:
-                total_cost = total_cost + (product_price * quantity)
+                total_cost = total_cost + (product_price['price'] * quantity)
                 new_stock = stock - quantity
                 cursor.execute("UPDATE product SET stock = %s WHERE product_id = %s;", (new_stock, product_id))
                 print(f"Updated stock for product {product_id}: {new_stock}")
