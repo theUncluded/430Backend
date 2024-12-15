@@ -99,12 +99,12 @@ def current_cart_db_update(users_email):
     
     cursor = connection.cursor(dictionary=True)
     
-    MOST_RECENT_CART_QUERY = f"""update users
+    MOST_RECENT_CART_QUERY = """update users
     set current_cart_id = (select max(cart_id) from cart where cart.users_id = users.users_id)
-    where users_email = {users_email}
+    where users_email = %s
     """
 
-    cursor.execute(MOST_RECENT_CART_QUERY)
+    cursor.execute(MOST_RECENT_CART_QUERY,(users_email,))
 
 def save_cart(user_id, cart_items):
     connection = get_db_connection()
@@ -213,7 +213,7 @@ def checkout(user_id, cart_items):
                 print(f"Invalid cart item: {item}")
                 raise ValueError("Invalid cart item data.")
 
-            cursor.execute("SELECT stock FROM product WHERE product_id = %s;", (product_id,))
+            cursor.execute("SELECT stock FROM product WHERE product_id = %s for update;", (product_id,))
             stock_row = cursor.fetchone()
 
             if not stock_row:
@@ -396,48 +396,54 @@ def authenticate_user(data):
 
 #adds a x amount of stock to a product - allocated by its id
 def add_x_to_product_stock(x,product_id):
-    GET_CURR_STOCK_QUERY = f'select stock from product where product_id = {product_id};'
+    GET_CURR_STOCK_QUERY = "select stock from product where product_id = %s for update;"
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True) 
-        cursor.execute(GET_CURR_STOCK_QUERY)
+        cursor.execute(GET_CURR_STOCK_QUERY,(product_id,))
         curr_stock = cursor.fetchone()[0]
     except:
+        connection.rollback()
         print("Failed to update value, please double check passed product_id")
     
     updated_stock = curr_stock + x
-    QUERY = f'''
+    QUERY = """
     update product 
-    set stock = {updated_stock}
-    where product_id = {product_id}
-    '''
+    set stock = %s
+    where product_id = %s;
+    """
     try:
-        cursor.execute(QUERY)
+        cursor.execute(QUERY,(updated_stock,product_id))
+        connection.commit()
     except:
+        connection.rollback()
         print("Addition statement failed! Reference database if issue persists")
 
     return updated_stock
 
 #removes a n amount of stock from a product
 def remove_x_from_product_stock(x , product_id):
-    GET_CURR_STOCK_QUERY = f'select stock from product where product_id = {product_id};'
+    GET_CURR_STOCK_QUERY = "select stock from product where product_id = %s for update;"
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True) 
-        cursor.execute(GET_CURR_STOCK_QUERY)
+        cursor.execute(GET_CURR_STOCK_QUERY,(product_id,))
         curr_stock = cursor.fetchone()[0]
     except:
+        connection.rollback()
         print("Failed to update value, please double check passed product_id")
 
     new_stock = curr_stock - x
-    QUERY = f'''
+    QUERY = """
     update product 
-    set stock = {new_stock}
-    where product_id = {product_id}
-    '''
+    set stock = %s
+    where product_id = %s;
+    """
     try:
-        cursor.execute(QUERY)
+        cursor.execute(QUERY,(new_stock,product_id))
+        connection.commit()
     except Exception as e:
+        connection.rollback()
         print(e)
 
 #utilizes an api call to get req the passed product name's rating and total amount of reviews
@@ -455,10 +461,10 @@ def add_new_product(p_name , p_price , p_stock, category):
     score = ratings["rating"]
     no_of_ratings = ratings["num_of_ratings"]
 
-    INS_INTO_QUERY = f'''
+    INS_INTO_QUERY = """
     INSERT INTO product (product_name , price , stock , rating, num_rating, category)
-    VALUES (%s , %s , %s , %s , %s , %s)
-    '''
+    VALUES (%s , %s , %s , %s , %s , %s);
+    """
 
     try:
         connection = get_db_connection()
@@ -468,6 +474,7 @@ def add_new_product(p_name , p_price , p_stock, category):
         print("Product insertion successful")
         return True, "Product insertion successful"  # Success case
     except Exception as e:
+        connection.rollback()
         print(f"Error inserting product: {e}")
         return False, str(e)  # Error case with the error message
     
@@ -487,6 +494,7 @@ def update_product(p_id, new_name, new_price, new_stock):
         connection.close()
         return jsonify({"success": True, "message": "Product updated"})
     except Exception as e:
+        connection.rollback()
         print(f"Error while updating product: {e}")
         return jsonify({"success": False, "message": "Failed to update product"})
 
@@ -502,8 +510,10 @@ def price_manip(p_id , new_price):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True) 
         cursor.execute(QUERY, (new_price,p_id))
+        connection.commit()
         print("Price update successful!")
     except Exception as e:
+        connection.rollback()
         print(e)
 
 # change the name of a product in the database via a reference to its id
@@ -518,6 +528,8 @@ def product_name_change(p_id , new_name):
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)         
         cursor.execute(QUERY, (new_name,p_id))
+        connection.commit()
         print("Name update successful!")
     except Exception as e:
+        connection.rollback()
         print(e)
